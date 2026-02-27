@@ -33,7 +33,16 @@ button{font-size:14px}
 .overlay-box.small{min-width:320px;max-width:90%;padding:12px} /* compact box */
 .hidden{display:none}
 
-/* confetti canvas will be full-screen, appended by JS and given a high z-index (2000) */
+/* Full-screen confetti canvas (appended by JS) */
+#confettiFull {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2000; /* above overlays */
+}
 
 /* Responsive */
 @media (max-width:640px){
