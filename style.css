@@ -27,17 +27,19 @@ main{max-width:1100px;margin:0 auto 40px;padding:0 12px}
 button{font-size:14px}
 #resetBtn{margin-top:14px;padding:8px 18px}
 
-/* Overlays */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:1000}
-.overlay-box{background:#1f1f1f;padding:22px;border-radius:10px;text-align:center;min-width:260px}
+/* Overlays (centered, same small box for both start & end) */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000}
+.overlay-box{background:#1f1f1f;padding:18px;border-radius:10px;text-align:center;min-width:260px}
+.overlay-box.small{min-width:360px;max-width:90%} /* keep start and end same size */
 .hidden{display:none}
 
-/* Confetti canvas */
+/* confetti canvas */
 #confettiCanvas{display:block;margin:12px auto 0;pointer-events:none}
 
 /* Responsive */
 @media (max-width:640px){
-  #board { width:280px }
+  #board{width:280px}
   :root{--tile-size:48px}
   #keyboard{width:92%}
+  .overlay-box.small{min-width:260px}
 }
