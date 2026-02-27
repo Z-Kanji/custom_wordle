@@ -1,165 +1,201 @@
-const role = new URLSearchParams(window.location.search).get("role") || "master";
-const ABLY_KEY = "kl-cqA.ucrYhg:ECzv8AHG9z3XIFia6nr8ZF9x4b-wfJc_iFlftdxZ7a0";
-const ably = new Ably.Realtime(ABLY_KEY);
-const channel = ably.channels.get("live-wordle");
+// MODE
+const params = new URLSearchParams(window.location.search);
+const mode = params.get("mode") || "master";
+const isMaster = mode === "master";
 
-let state = {
-  answer: "",
-  board: Array(6).fill(null).map(()=>Array(5).fill("")),
-  keyboard: {},
-  row: 0,
-  col: 0,
-  active: false,
-  endMessage: ""
-};
+// ABLY
+const ably = new Ably.Realtime("kl-cqA.ucrYhg:ECzv8AHG9z3XIFia6nr8ZF9x4b-wfJc_iFlftdxZ7a0");
+const channel = ably.channels.get("custom-wordle");
 
-const boardEl = document.getElementById("board");
-const keyboardEl = document.getElementById("keyboard");
-const resetBtn = document.getElementById("resetBtn");
-const restartBtn = document.getElementById("restartBtn");
-const wordOverlay = document.getElementById("wordOverlay");
-const endOverlay = document.getElementById("endOverlay");
-const endMessage = document.getElementById("endMessage");
+// GAME STATE
+let solution = "";
+let currentRow = 0;
+let currentGuess = "";
+let gameOver = false;
+let boardState = [];
+let keyStates = {};
 
-if(role === "follower"){
-  keyboardEl.style.display="none";
-  resetBtn.style.display="none";
-  wordOverlay.style.display="none";
-}
+const board = document.getElementById("board");
+const keyboard = document.getElementById("keyboard");
+const overlay = document.getElementById("overlay");
+const startBtn = document.getElementById("startBtn");
 
-function publish(){ if(role==="master") channel.publish("update", state); }
+// KEYBOARD LAYOUT
+const layout = [
+  "QWERTYUIOP",
+  "ASDFGHJKL",
+  "ENTERZXCVBNMDEL"
+];
 
-channel.subscribe("update", msg=>{
-  if(role==="master") return;
-  state = msg.data;
-  render();
-});
+// INIT
+startBtn.addEventListener("click", startGame);
 
-function buildBoard(){
-  boardEl.innerHTML="";
-  for(let r=0;r<6;r++){
-    const row=document.createElement("div");
-    row.className="row";
-    for(let c=0;c<5;c++){
-      const tile=document.createElement("div");
-      tile.className="tile";
-      tile.textContent=state.board[r][c];
-      row.appendChild(tile);
-    }
-    boardEl.appendChild(row);
+function startGame() {
+  const wordInput = document.getElementById("customWord").value.toUpperCase();
+  if (wordInput.length !== 5) return;
+
+  solution = wordInput;
+  overlay.style.display = "none";
+  initBoard();
+  initKeyboard();
+
+  if (isMaster) {
+    publishState();
   }
 }
 
-function buildKeyboard(){
-  keyboardEl.innerHTML="";
-  const layout=["QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
-  layout.forEach((row,i)=>{
-    const rowDiv=document.createElement("div");
-    rowDiv.className="key-row";
-    if(i===2) rowDiv.appendChild(createKey("ENTER"));
-    row.split("").forEach(l=>rowDiv.appendChild(createKey(l)));
-    if(i===2) rowDiv.appendChild(createKey("DELETE"));
-    keyboardEl.appendChild(rowDiv);
+function initBoard() {
+  board.innerHTML = "";
+  boardState = [];
+
+  for (let r = 0; r < 6; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    boardState[r] = [];
+
+    for (let c = 0; c < 5; c++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      row.appendChild(tile);
+      boardState[r].push("");
+    }
+
+    board.appendChild(row);
+  }
+}
+
+function initKeyboard() {
+  keyboard.innerHTML = "";
+
+  layout.forEach(rowStr => {
+    const row = document.createElement("div");
+    row.className = "key-row";
+
+    if (rowStr === "ENTERZXCVBNMDEL") {
+      createKey("ENTER", row);
+      "ZXCVBNM".split("").forEach(k => createKey(k, row));
+      createKey("DEL", row);
+    } else {
+      rowStr.split("").forEach(k => createKey(k, row));
+    }
+
+    keyboard.appendChild(row);
   });
 }
 
-function createKey(label){
-  const btn=document.createElement("button");
-  btn.className="key";
-  btn.textContent=label;
-
-  if(state.keyboard[label])
-    btn.classList.add(state.keyboard[label]);
-
-  if(role==="master"){
-    btn.onclick=()=>handle(label);
-  }
-  return btn;
+function createKey(letter, row) {
+  const key = document.createElement("div");
+  key.className = "key";
+  key.textContent = letter;
+  key.onclick = () => handleKey(letter);
+  row.appendChild(key);
 }
 
-function handle(label){
-  if(!state.active) return;
+function handleKey(letter) {
+  if (!isMaster || gameOver) return;
 
-  if(label==="ENTER") submit();
-  else if(label==="DELETE"){
-    if(state.col>0){
-      state.col--;
-      state.board[state.row][state.col]="";
-    }
-  } else if(state.col<5){
-    state.board[state.row][state.col]=label;
-    state.col++;
+  if (letter === "ENTER") {
+    if (currentGuess.length === 5) submitGuess();
+    return;
   }
 
-  render();
-  publish();
+  if (letter === "DEL") {
+    currentGuess = currentGuess.slice(0, -1);
+    updateBoard();
+    return;
+  }
+
+  if (currentGuess.length < 5) {
+    currentGuess += letter;
+    updateBoard();
+  }
 }
 
-function submit(){
-  if(state.col!==5) return;
-  const guess=state.board[state.row].join("");
+function updateBoard() {
+  const row = board.children[currentRow];
+  for (let i = 0; i < 5; i++) {
+    row.children[i].textContent = currentGuess[i] || "";
+  }
+}
 
-  for(let i=0;i<5;i++){
-    const letter=guess[i];
-    if(letter===state.answer[i]){
-      state.keyboard[letter]="correct";
-    } else if(state.answer.includes(letter)){
-      if(state.keyboard[letter]!=="correct")
-        state.keyboard[letter]="present";
+function submitGuess() {
+  const row = board.children[currentRow];
+  const guess = currentGuess;
+
+  for (let i = 0; i < 5; i++) {
+    const tile = row.children[i];
+    const letter = guess[i];
+
+    if (letter === solution[i]) {
+      tile.classList.add("green");
+      keyStates[letter] = "green";
+    } else if (solution.includes(letter)) {
+      tile.classList.add("yellow");
+      if (keyStates[letter] !== "green") keyStates[letter] = "yellow";
     } else {
-      if(!state.keyboard[letter])
-        state.keyboard[letter]="absent";
+      tile.classList.add("gray");
+      if (!keyStates[letter]) keyStates[letter] = "gray";
     }
   }
 
-  if(guess===state.answer){
-    state.endMessage="You Win!";
-    state.active=false;
-  } else {
-    state.row++;
-    state.col=0;
-    if(state.row===6){
-      state.endMessage="You Lose! Word was: "+state.answer;
-      state.active=false;
+  updateKeyboardColors();
+
+  if (guess === solution) {
+    gameOver = true;
+    showWin();
+  }
+
+  currentRow++;
+  currentGuess = "";
+
+  publishState();
+}
+
+function updateKeyboardColors() {
+  document.querySelectorAll(".key").forEach(key => {
+    const letter = key.textContent;
+    if (keyStates[letter]) {
+      key.classList.add(keyStates[letter]);
     }
-  }
-
-  render();
-  publish();
+  });
 }
 
-function render(){
-  buildBoard();
-  if(role==="master") buildKeyboard();
-  if(state.endMessage){
-    endMessage.textContent=state.endMessage;
-    endOverlay.classList.remove("hidden");
-  }
+function showWin() {
+  const win = document.getElementById("winMessage");
+  win.classList.remove("hidden");
+  startConfetti();
 }
 
-document.getElementById("startBtn").onclick=()=>{
-  const word=document.getElementById("wordInput").value.toUpperCase();
-  if(word.length===5){
-    state.answer=word;
-    state.active=true;
-    wordOverlay.classList.add("hidden");
-    publish();
-  }
-};
+function startConfetti() {
+  const canvas = document.getElementById("confetti");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext("2d");
 
-resetBtn.onclick=()=>{
-  state.board=Array(6).fill(null).map(()=>Array(5).fill(""));
-  state.keyboard={};
-  state.row=0;
-  state.col=0;
-  state.active=true;
-  state.endMessage="";
-  publish();
-  render();
-};
+  setInterval(() => {
+    ctx.fillStyle = `hsl(${Math.random()*360},100%,50%)`;
+    ctx.fillRect(Math.random()*canvas.width,
+                 Math.random()*canvas.height,
+                 5,5);
+  }, 20);
+}
 
-restartBtn.onclick=()=>{
-  location.reload();
-};
+// ABLY SYNC
+function publishState() {
+  channel.publish("update", {
+    boardHTML: board.innerHTML,
+    keyboardHTML: keyboard.innerHTML,
+    currentRow,
+    gameOver
+  });
+}
 
-render();
+if (!isMaster) {
+  overlay.style.display = "none";
+  channel.subscribe("update", msg => {
+    board.innerHTML = msg.data.boardHTML;
+    keyboard.innerHTML = msg.data.keyboardHTML;
+    currentRow = msg.data.currentRow;
+    gameOver = msg.data.gameOver;
+  });
+}
