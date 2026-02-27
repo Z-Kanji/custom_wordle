@@ -4,7 +4,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // MODE & ABLY
   // =====================
   const params = new URLSearchParams(window.location.search);
-  const isMaster = !params.has("mode") || params.get("mode")==="master";
+  const modeParam = params.get("mode");
+  const isMaster = modeParam === null || modeParam === "master";
   const ablyKey = params.get("ablyKey");
   let channel;
   if(ablyKey){
@@ -43,6 +44,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // =====================
   // START GAME
   // =====================
+  if(!isMaster){
+    overlay.style.display="none";
+  }
+
   if(isMaster){
     startBtn.addEventListener("click", () => {
       const wordInput = document.getElementById("customWord").value.toUpperCase();
@@ -53,8 +58,6 @@ document.addEventListener("DOMContentLoaded", function () {
       initKeyboard();
       publishState();
     });
-  } else {
-    overlay.style.display="none";
   }
 
   // =====================
