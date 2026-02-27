@@ -2,33 +2,29 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Live Wordle</title>
+  <title>Custom Wordle</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
 </head>
 <body>
 
-<div id="wordOverlay" class="overlay">
-  <div class="overlay-content">
+<div id="overlay">
+  <div class="overlay-box">
     <h2>Enter 5 Letter Word</h2>
-    <input id="wordInput" maxlength="5" autocomplete="off" />
+    <input type="text" id="customWord" maxlength="5">
     <button id="startBtn">Start Game</button>
   </div>
 </div>
 
-<div id="gameContainer">
-  <div id="board"></div>
-  <div id="keyboard"></div>
-  <button id="resetBtn">Reset</button>
+<h1>Custom Wordle</h1>
+<div id="board"></div>
+<div id="keyboard"></div>
+
+<div id="winMessage" class="hidden">
+  <h2>You Win!</h2>
+  <canvas id="confetti"></canvas>
 </div>
 
-<div id="endOverlay" class="overlay hidden">
-  <div class="overlay-content">
-    <h2 id="endMessage"></h2>
-    <button id="restartBtn">Restart Game</button>
-  </div>
-</div>
-
-<script src="game.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
