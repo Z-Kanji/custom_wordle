@@ -33,13 +33,7 @@ body {
 .present { background: #b59f3b; }
 .absent  { background: #3a3a3c; }
 
-#keyboard {
-  margin-top: 20px;
-}
-
-.key-row {
-  margin-bottom: 6px;
-}
+.key-row { margin-bottom: 6px; }
 
 .key {
   margin: 3px;
@@ -50,6 +44,10 @@ body {
   font-weight: bold;
   cursor: pointer;
 }
+
+.key.correct { background: #538d4e; }
+.key.present { background: #b59f3b; }
+.key.absent  { background: #3a3a3c; }
 
 #resetBtn {
   margin-top: 15px;
@@ -72,6 +70,4 @@ body {
   padding: 30px;
 }
 
-.hidden {
-  display: none;
-}
+.hidden { display: none; }
