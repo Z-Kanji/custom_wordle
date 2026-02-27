@@ -7,7 +7,7 @@
   <script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
 </head>
 <body>
-  <!-- Start overlay (master only) -->
+  <!-- START OVERLAY (master only) -->
   <div id="startOverlay" class="overlay">
     <div class="overlay-box">
       <h2>Enter 5-letter word</h2>
@@ -18,9 +18,7 @@
     </div>
   </div>
 
-  <header>
-    <h1>Custom Wordle</h1>
-  </header>
+  <header><h1>Custom Wordle</h1></header>
 
   <main>
     <div id="board" aria-hidden="false"></div>
@@ -32,11 +30,11 @@
     </div>
   </main>
 
-  <!-- End overlay -->
+  <!-- END / WIN OVERLAY -->
   <div id="endOverlay" class="overlay hidden">
     <div class="overlay-box">
       <h2 id="endText"></h2>
-      <canvas id="confettiCanvas"></canvas>
+      <canvas id="confettiCanvas" width="420" height="140"></canvas>
       <div style="margin-top:12px;">
         <button id="restartBtn">Restart Game</button>
       </div>
