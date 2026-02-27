@@ -1,120 +1,43 @@
-/* Basic layout */
 :root {
   --bg: #121213;
   --tile-border: #3a3a3c;
-  --tile-size: 60px;
+  --tile-size: 56px;
 }
-
-html,body{
-  height:100%;
-  margin:0;
-  padding:0;
-  background:var(--bg);
-  color:#fff;
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-}
-
-header { padding: 18px 0; text-align:center; }
-h1 { margin:0; font-size:28px; }
-
-main { max-width:1100px; margin:0 auto 40px; padding:0 12px; }
+html,body{height:100%;margin:0;padding:0;background:var(--bg);color:#fff;font-family:Arial,Helvetica,sans-serif}
+header{padding:14px 0;text-align:center} h1{margin:0;font-size:24px}
+main{max-width:1100px;margin:0 auto 40px;padding:0 12px}
 
 /* Board */
-#board {
-  width: 360px;
-  margin: 12px auto;
-  display: grid;
-  gap:8px;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap:8px;
-  justify-items:center;
-}
-
-.tile {
-  width: var(--tile-size);
-  height: var(--tile-size);
-  border: 2px solid var(--tile-border);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  text-transform:uppercase;
-  font-weight:700;
-  font-size:28px;
-  background:#111;
-  box-sizing:border-box;
-}
-
-/* Tile states */
-.tile.correct { background: #2ecc71; border-color:#2ecc71; color:#06210a; }
-.tile.present { background: #f1c40f; border-color:#f1c40f; color:#3a2b00; }
-.tile.absent  { background: #3a3a3c; border-color:#3a3a3c; color:#fff; }
+#board{width:360px;margin:12px auto;display:grid;gap:8px}
+.row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;justify-items:center}
+.tile{width:var(--tile-size);height:var(--tile-size);border:2px solid var(--tile-border);display:flex;align-items:center;justify-content:center;text-transform:uppercase;font-weight:700;font-size:26px;background:#111;box-sizing:border-box}
+.tile.correct{background:#2ecc71;border-color:#2ecc71;color:#06210a}
+.tile.present{background:#f1c40f;border-color:#f1c40f;color:#3a2b00}
+.tile.absent{background:#3a3a3c;border-color:#3a3a3c;color:#fff}
 
 /* Keyboard */
-#keyboard { width: 600px; margin: 18px auto 8px; }
-.key-row { display:flex; justify-content:center; margin-bottom:8px; }
-.key {
-  margin: 4px;
-  padding: 10px 14px;
-  min-width: 44px;
-  border-radius:6px;
-  background:#818384;
-  color:#fff;
-  font-weight:700;
-  cursor:pointer;
-  user-select:none;
-  border:none;
-  box-shadow: none;
-}
-.key.correct { background: #2ecc71; color:#06210a; }
-.key.present { background: #f1c40f; color:#3a2b00; }
-.key.absent  { background: #3a3a3c; color:#fff; }
+#keyboard{width:640px;margin:18px auto 8px}
+.key-row{display:flex;justify-content:center;margin-bottom:8px}
+.key{margin:4px;padding:10px 14px;min-width:44px;border-radius:6px;background:#818384;color:#fff;font-weight:700;cursor:pointer;user-select:none;border:none}
+.key.correct{background:#2ecc71;color:#06210a}
+.key.present{background:#f1c40f;color:#3a2b00}
+.key.absent{background:#3a3a3c;color:#fff}
 
 /* Buttons */
-button { font-size:14px; }
-
-/* Reset button */
-#resetBtn { margin-top:14px; padding:8px 18px; }
+button{font-size:14px}
+#resetBtn{margin-top:14px;padding:8px 18px}
 
 /* Overlays */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.9);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:1000;
-}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:1000}
+.overlay-box{background:#1f1f1f;padding:22px;border-radius:10px;text-align:center;min-width:260px}
+.hidden{display:none}
 
-.overlay-box {
-  background:#1f1f1f;
-  padding:22px;
-  border-radius:10px;
-  text-align:center;
-  min-width:260px;
-}
+/* Confetti canvas */
+#confettiCanvas{display:block;margin:12px auto 0;pointer-events:none}
 
-/* Hide helper */
-.hidden { display:none; }
-
-/* confetti canvas */
-#confettiCanvas {
-  width: 420px;
-  height: 140px;
-  display:block;
-  margin: 12px auto 0;
-  pointer-events:none;
-}
-
-/* responsive */
+/* Responsive */
 @media (max-width:640px){
-  #board { width: 280px; }
-  :root { --tile-size:48px; }
-  #keyboard { width: 92%; }
+  #board { width:280px }
+  :root{--tile-size:48px}
+  #keyboard{width:92%}
 }
