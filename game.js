@@ -1,17 +1,19 @@
-/* game.js - master/follower Wordle with Ably sync
+/* game.js
+   Master/follower Wordle using Ably.
    Usage:
      index.html?ablyKey=YOUR_KEY&mode=master
      index.html?ablyKey=YOUR_KEY&mode=follow
-   Files must be named index.html, style.css, game.js
+   This file must be named game.js
 */
+
 document.addEventListener('DOMContentLoaded', () => {
-  // ---- URL params & mode ----
+  // --- params & mode ---
   const params = new URLSearchParams(window.location.search);
   const ablyKey = params.get('ablyKey') || params.get('key') || '';
-  const modeParam = params.get('mode') || params.get('role') || 'master';
+  const modeParam = (params.get('mode') || params.get('role') || 'master').toLowerCase();
   const isMaster = (modeParam === 'master' || modeParam === 'm' || !params.has('mode'));
 
-  // ---- DOM elements ----
+  // --- DOM refs ---
   const startOverlay = document.getElementById('startOverlay');
   const customWordInput = document.getElementById('customWord');
   const startBtn = document.getElementById('startBtn');
@@ -23,45 +25,41 @@ document.addEventListener('DOMContentLoaded', () => {
   const restartBtn = document.getElementById('restartBtn');
   const confettiCanvas = document.getElementById('confettiCanvas');
 
-  // ---- state ----
+  // --- game state ---
   let solution = '';
   let board = Array.from({length:6}, ()=>Array.from({length:5}, ()=>''));
-  let tileStates = Array.from({length:6}, ()=>Array.from({length:5}, ()=>'')); // 'correct'|'present'|'absent'|''
-  let keyStates = {}; // A->'correct'|'present'|'absent'
+  let tileStates = Array.from({length:6}, ()=>Array.from({length:5}, ()=>'')); // '', 'correct','present','absent'
+  let keyStates = {}; // letter -> '', 'correct','present','absent'
   let currentRow = 0;
   let currentCol = 0;
   let gameStarted = false;
   let gameOver = false;
-  let lastResetTime = 0;
-  let confettiTimer = null;
+  let lastReset = 0;
+  let confettiAnim = null;
 
-  // ---- Ably ----
+  // --- Ably setup ---
   let channel = null;
   if (ablyKey) {
     try {
       const ably = new Ably.Realtime(ablyKey);
-      channel = ably.channels.get('custom-wordle');
-    } catch (e) {
-      console.warn('Ably init failed', e);
+      channel = ably.channels.get('custom-wordle-channel');
+    } catch (err) {
+      console.warn('Ably init failed', err);
       channel = null;
     }
   }
 
-  // ---- keyboard layout ----
+  // --- keyboard layout ---
   const LAYOUT = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
 
-  // ---- helpers: render board/keyboard ----
+  // --- render functions ---
   function renderBoard() {
     boardEl.innerHTML = '';
-    for (let r=0;r<6;r++){
-      const row = document.createElement('div');
-      row.className = 'row';
-      for (let c=0;c<5;c++){
-        const tile = document.createElement('div');
-        tile.className = 'tile';
-        const ch = board[r][c] || '';
-        tile.textContent = ch;
-        // apply tile state
+    for (let r=0; r<6; r++){
+      const row = document.createElement('div'); row.className='row';
+      for (let c=0; c<5; c++){
+        const tile = document.createElement('div'); tile.className='tile';
+        tile.textContent = board[r][c] || '';
         tile.classList.remove('correct','present','absent');
         const s = tileStates[r][c];
         if (s === 'correct') tile.classList.add('correct');
@@ -75,39 +73,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderKeyboard() {
     keyboardEl.innerHTML = '';
-    // Top two rows normal, third row includes ENTER left and DEL right
-    LAYOUT.forEach((rowStr, idx) => {
-      if (idx < 2) {
-        const rowDiv = document.createElement('div'); rowDiv.className='key-row';
-        for (let ch of rowStr.split('')){
-          const btn = document.createElement('button'); btn.className='key'; btn.textContent=ch;
-          // color
-          if (keyStates[ch]) btn.classList.add(keyStates[ch]);
-          if (isMaster && gameStarted) btn.addEventListener('click', ()=>onScreenKey(ch));
-          rowDiv.appendChild(btn);
-        }
-        keyboardEl.appendChild(rowDiv);
-      } else {
-        // bottom row with ENTER and DEL
-        const rowDiv = document.createElement('div'); rowDiv.className='key-row';
+    for (let i=0;i<LAYOUT.length;i++){
+      const rowStr = LAYOUT[i];
+      const rowDiv = document.createElement('div'); rowDiv.className='key-row';
+
+      if (i === 2) {
+        // enter left
         const enterBtn = document.createElement('button'); enterBtn.className='key'; enterBtn.textContent='ENTER';
         if (isMaster && gameStarted) enterBtn.addEventListener('click', ()=>onScreenKey('ENTER'));
         rowDiv.appendChild(enterBtn);
-        for (let ch of rowStr.split('')){
-          const btn = document.createElement('button'); btn.className='key'; btn.textContent=ch;
-          if (keyStates[ch]) btn.classList.add(keyStates[ch]);
-          if (isMaster && gameStarted) btn.addEventListener('click', ()=>onScreenKey(ch));
-          rowDiv.appendChild(btn);
-        }
+      }
+
+      for (let ch of rowStr.split('')) {
+        const btn = document.createElement('button'); btn.className='key'; btn.textContent=ch;
+        if (keyStates[ch]) btn.classList.add(keyStates[ch]);
+        if (isMaster && gameStarted) btn.addEventListener('click', ()=>onScreenKey(ch));
+        rowDiv.appendChild(btn);
+      }
+
+      if (i === 2) {
         const delBtn = document.createElement('button'); delBtn.className='key'; delBtn.textContent='DEL';
         if (isMaster && gameStarted) delBtn.addEventListener('click', ()=>onScreenKey('DEL'));
         rowDiv.appendChild(delBtn);
-        keyboardEl.appendChild(rowDiv);
       }
-    });
+
+      keyboardEl.appendChild(rowDiv);
+    }
   }
 
-  // ---- on-screen key handler (master only, only when gameStarted) ----
+  // --- input handlers (master only when gameStarted) ---
   function onScreenKey(label) {
     if (!isMaster || !gameStarted || gameOver) return;
     if (label === 'ENTER') {
@@ -123,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return;
     }
-    // letter
     if (currentCol < 5) {
       board[currentRow][currentCol] = label;
       currentCol++;
@@ -132,73 +125,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---- physical keyboard (master only, only when gameStarted) ----
   document.addEventListener('keydown', (e) => {
     if (!isMaster || !gameStarted || gameOver) return;
-    if (e.key === 'Enter') {
-      if (currentCol === 5) submitGuess();
-      return;
-    }
-    if (e.key === 'Backspace') {
-      if (currentCol > 0) {
-        currentCol--;
-        board[currentRow][currentCol] = '';
-        publishState();
-        renderBoard();
-      }
-      return;
-    }
-    const k = e.key.toUpperCase();
-    if (/^[A-Z]$/.test(k) && k.length === 1) {
-      if (currentCol < 5) {
-        board[currentRow][currentCol] = k;
-        currentCol++;
-        publishState();
-        renderBoard();
-      }
+    if (e.key === 'Enter') { if (currentCol === 5) submitGuess(); return; }
+    if (e.key === 'Backspace') { if (currentCol > 0){ currentCol--; board[currentRow][currentCol]=''; publishState(); renderBoard(); } return; }
+    const ch = e.key.toUpperCase();
+    if (/^[A-Z]$/.test(ch) && ch.length === 1 && currentCol < 5) {
+      board[currentRow][currentCol] = ch;
+      currentCol++;
+      publishState();
+      renderBoard();
     }
   });
 
-  // ---- evaluate guess with Wordle rules (handles duplicates) ----
+  // --- evaluate guess (handles duplicates correctly) ---
   function evaluateGuess(guess, answer) {
     const res = Array(5).fill('absent');
-    const a = answer.split('');
-    // first pass correct
-    for (let i=0;i<5;i++){
-      if (guess[i] === a[i]) { res[i] = 'correct'; a[i] = null; }
-    }
-    // second pass present
-    for (let i=0;i<5;i++){
-      if (res[i] === 'correct') continue;
-      const idx = a.indexOf(guess[i]);
-      if (idx !== -1) { res[i] = 'present'; a[idx] = null; }
-    }
+    const arr = answer.split('');
+    for (let i=0;i<5;i++){ if (guess[i] === arr[i]) { res[i] = 'correct'; arr[i] = null; } }
+    for (let i=0;i<5;i++){ if (res[i] === 'correct') continue; const idx = arr.indexOf(guess[i]); if (idx !== -1){ res[i] = 'present'; arr[idx]=null; } }
     return res;
   }
 
-  // ---- submit guess (master only) ----
+  // --- submit (master only) ---
   function submitGuess() {
     if (!isMaster || !gameStarted || gameOver) return;
     if (currentCol !== 5) return;
     const guess = board[currentRow].join('');
     if (guess.length !== 5) return;
 
-    const evalRes = evaluateGuess(guess, solution);
+    const result = evaluateGuess(guess, solution);
 
-    // apply tile states and update keyStates with priority correct>present>absent
-    for (let i=0;i<5;i++){
-      tileStates[currentRow][i] = evalRes[i] === 'correct' ? 'correct' : (evalRes[i] === 'present' ? 'present' : 'absent');
-      const L = board[currentRow][i];
-      if (evalRes[i] === 'correct') keyStates[L] = 'correct';
-      else if (evalRes[i] === 'present') { if (keyStates[L] !== 'correct') keyStates[L] = 'present'; }
+    for (let c=0;c<5;c++){
+      tileStates[currentRow][c] = result[c] === 'correct' ? 'correct' : (result[c] === 'present' ? 'present' : 'absent');
+      const L = board[currentRow][c];
+      if (result[c] === 'correct') keyStates[L] = 'correct';
+      else if (result[c] === 'present') { if (keyStates[L] !== 'correct') keyStates[L] = 'present'; }
       else { if (!keyStates[L]) keyStates[L] = 'absent'; }
     }
 
     renderBoard();
     renderKeyboard();
 
-    // win?
-    if (evalRes.every(x => x === 'correct')) {
+    if (result.every(x => x === 'correct')) {
       gameOver = true;
       showEnd(true);
     } else {
@@ -210,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     publishState();
   }
 
-  // ---- show end overlay & confetti ----
+  // --- end overlay & confetti (falling) ---
   function showEnd(win) {
     endText.textContent = win ? 'YOU WIN!' : ('YOU LOSE! Word: ' + solution);
     endOverlay.classList.remove('hidden');
@@ -222,34 +191,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = confettiCanvas;
     const ctx = canvas.getContext('2d');
     canvas.width = 420; canvas.height = 140;
-    if (confettiTimer) clearInterval(confettiTimer);
-    confettiTimer = setInterval(()=>{
-      ctx.fillStyle = `hsl(${Math.random()*360},100%,50%)`;
-      ctx.fillRect(Math.random()*canvas.width, Math.random()*canvas.height, 6, 6);
-    }, 30);
-    setTimeout(()=>{ clearInterval(confettiTimer); confettiTimer = null; ctx.clearRect(0,0,canvas.width,canvas.height); }, 6000);
+    const particles = [];
+    const colors = ['#f1c40f','#2ecc71','#e74c3c','#3498db','#ffffff'];
+
+    for (let i=0;i<120;i++){
+      particles.push({
+        x: Math.random()*canvas.width,
+        y: -Math.random()*canvas.height*2, // start above
+        vx: (Math.random()-0.5)*1.5,
+        vy: 1 + Math.random()*3,
+        size: 4 + Math.random()*6,
+        color: colors[Math.floor(Math.random()*colors.length)],
+        rot: Math.random()*360
+      });
+    }
+
+    let raf;
+    function frame(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for (let p of particles){
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.03; // gravity
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot * Math.PI / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+        ctx.restore();
+      }
+      raf = requestAnimationFrame(frame);
+    }
+    frame();
+    setTimeout(()=>{ cancelAnimationFrame(raf); ctx.clearRect(0,0,canvas.width,canvas.height); }, 6000);
   }
 
-  // ---- reset / restart behavior ----
-  resetBtn.addEventListener('click', () => {
+  // --- reset / restart (single/double click) ---
+  resetBtn.addEventListener('click', ()=>{
     const now = Date.now();
-    if (now - lastResetTime < 1000) {
-      // full restart
+    if (now - lastReset < 1000){
+      // full restart: reload to ensure clean state & re-open overlay on master
       fullReset();
     } else {
-      // soft reset: clear guesses & keys, keep solution, keep overlay hidden
       softReset();
       publishState();
-      lastResetTime = now;
+      lastReset = now;
     }
   });
 
-  restartBtn.addEventListener('click', () => {
-    // Restart entire game (master triggers overlay)
+  restartBtn.addEventListener('click', ()=>{
     if (isMaster) fullReset();
   });
 
-  function softReset() {
+  function softReset(){
     board = Array.from({length:6}, ()=>Array.from({length:5}, ()=>''));
     tileStates = Array.from({length:6}, ()=>Array.from({length:5}, ()=>''));
     keyStates = {};
@@ -260,45 +254,41 @@ document.addEventListener('DOMContentLoaded', () => {
     renderKeyboard();
   }
 
-  function fullReset() {
+  function fullReset(){
     softReset();
     solution = '';
     gameStarted = false;
-    // show start overlay for master
-    if (isMaster) {
-      const s = document.getElementById('startOverlay');
-      if (s) s.style.display = 'flex';
-    }
+    // show overlay only for master
+    if (isMaster && startOverlay) startOverlay.style.display = 'flex';
     publishState();
   }
 
-  // ---- publish + subscribe ----
-  function publishState() {
+  // --- publish / subscribe ---
+  function publishState(){
     if (!channel || !isMaster) return;
-    const state = {
-      board, tileStates, keyStates, currentRow, currentCol, gameStarted, gameOver, // do NOT include solution unless gameOver for follower display
-      solution: gameOver ? solution : undefined
+    const payload = {
+      board, tileStates, keyStates, currentRow, currentCol, gameStarted, gameOver,
+      // send solution only when game over so follower can show losing word (avoid exposing solution mid-game)
+      solution: gameOver ? solution : undefined,
+      timestamp: Date.now()
     };
-    channel.publish('state', state);
+    channel.publish('state', payload);
   }
 
-  function applyStateFromMaster(stateObj) {
-    if (!stateObj) return;
-    // deep-assign safe
-    board = stateObj.board || board;
-    tileStates = stateObj.tileStates || tileStates;
-    keyStates = stateObj.keyStates || keyStates;
-    currentRow = (typeof stateObj.currentRow === 'number') ? stateObj.currentRow : currentRow;
-    currentCol = (typeof stateObj.currentCol === 'number') ? stateObj.currentCol : currentCol;
-    gameStarted = !!stateObj.gameStarted;
-    gameOver = !!stateObj.gameOver;
-    if (gameOver && stateObj.solution) {
-      solution = stateObj.solution;
-    }
+  function applyState(state){
+    if (!state) return;
+    board = state.board || board;
+    tileStates = state.tileStates || tileStates;
+    keyStates = state.keyStates || keyStates;
+    currentRow = (typeof state.currentRow === 'number') ? state.currentRow : currentRow;
+    currentCol = (typeof state.currentCol === 'number') ? state.currentCol : currentCol;
+    gameStarted = !!state.gameStarted;
+    gameOver = !!state.gameOver;
+    if (state.solution) solution = state.solution;
     renderBoard();
     renderKeyboard();
     if (gameOver) {
-      endText.textContent = stateObj.solution ? ('YOU LOSE! Word: ' + stateObj.solution) : 'GAME OVER';
+      endText.textContent = state.solution ? ('YOU LOSE! Word: ' + state.solution) : 'GAME OVER';
       endOverlay.classList.remove('hidden');
     } else {
       endOverlay.classList.add('hidden');
@@ -306,57 +296,48 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (channel) {
-    // subscribe right away (follower & master too; master ignores incoming)
-    channel.subscribe('state', (msg) => {
+    // subscribe asap
+    channel.subscribe('state', msg => {
       if (isMaster) return;
-      applyStateFromMaster(msg.data);
+      applyState(msg.data);
     });
 
-    // follower fetch history recent last item to catchup
+    // follower fetch latest message to catch up
     if (!isMaster && channel.history) {
-      channel.history((err, result) => {
+      channel.history({limit: 5}, (err, result) => {
         if (!err && result && result.items && result.items.length) {
-          const last = result.items[result.items.length-1];
-          if (last && last.data) applyStateFromMaster(last.data);
+          // pick the most recent item with data
+          const last = result.items[result.items.length - 1];
+          if (last && last.data) applyState(last.data);
         }
       });
     }
   }
 
-  // ---- start overlay wiring (master only) ----
+  // --- start overlay wiring (master) ---
   if (isMaster) {
-    const s = document.getElementById('startOverlay');
-    if (s) s.style.display = 'flex';
-    // click
+    if (startOverlay) startOverlay.style.display = 'flex';
     startBtn.addEventListener('click', startFromOverlay);
-    // enter key inside input
-    customWordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startFromOverlay(); });
+    if (customWordInput) customWordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startFromOverlay(); });
   } else {
-    // follower: hide overlay if present
-    const s = document.getElementById('startOverlay');
-    if (s) s.style.display = 'none';
+    if (startOverlay) startOverlay.style.display = 'none';
   }
 
-  function startFromOverlay() {
+  function startFromOverlay(){
+    if (!customWordInput) return;
     const val = (customWordInput.value || '').trim().toUpperCase();
-    if (!val || val.length !== 5) return;
+    if (val.length !== 5) return;
     solution = val;
     gameStarted = true;
-    // hide overlay
-    const s = document.getElementById('startOverlay');
-    if (s) s.style.display = 'none';
-    // ensure blank board
-    softReset();
-    // render keyboard/board
+    if (startOverlay) startOverlay.style.display = 'none';
+    softReset(); // ensure board blank
     renderBoard();
     renderKeyboard();
-    // broadcast initial state
     publishState();
   }
 
-  // ---- initial render ----
+  // --- initial draw ---
   softReset();
   renderBoard();
   renderKeyboard();
-
-}); // DOMContentLoaded end
+});
