@@ -9,7 +9,7 @@
 <body>
   <!-- START OVERLAY (master only) -->
   <div id="startOverlay" class="overlay">
-    <div class="overlay-box">
+    <div class="overlay-box small">
       <h2>Enter 5-letter word</h2>
       <input id="customWord" maxlength="5" autocomplete="off" />
       <div style="margin-top:12px;">
@@ -22,7 +22,6 @@
 
   <main>
     <div id="board" aria-hidden="false"></div>
-
     <div id="keyboard"></div>
 
     <div style="text-align:center;">
@@ -30,9 +29,9 @@
     </div>
   </main>
 
-  <!-- END / WIN OVERLAY -->
+  <!-- END / WIN OVERLAY (small box, same size for both) -->
   <div id="endOverlay" class="overlay hidden">
-    <div class="overlay-box">
+    <div class="overlay-box small">
       <h2 id="endText"></h2>
       <canvas id="confettiCanvas" width="420" height="140"></canvas>
       <div style="margin-top:12px;">
