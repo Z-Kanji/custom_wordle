@@ -1,43 +1,319 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Custom Wordle</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Custom Wordle</title>
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #111;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  #scaleWrapper {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform-origin: top center;
+  }
+
+  #gameContainer {
+    text-align: center;
+  }
+
+  h1 {
+    margin-bottom: 20px;
+  }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(5, 70px);
+    grid-gap: 8px;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+
+  .tile {
+    width: 70px;
+    height: 70px;
+    border: 2px solid #444;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 36px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .correct { background: #538d4e; }
+  .present { background: #b59f3b; }
+  .absent  { background: #3a3a3c; }
+
+  #message {
+    font-size: 32px;
+    margin-top: 20px;
+  }
+
+  #timer {
+    font-size: 20px;
+    margin-top: 10px;
+  }
+
+  button {
+    padding: 10px 20px;
+    margin: 5px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+  }
+</style>
 </head>
 <body>
-  <!-- START OVERLAY (master only) -->
-  <div id="startOverlay" class="overlay">
-    <div class="overlay-box small">
-      <h2>Enter 5-letter word</h2>
-      <input id="customWord" maxlength="5" autocomplete="off" />
-      <div style="margin-top:12px;">
-        <button id="startBtn">Start Game</button>
-      </div>
+
+<div id="scaleWrapper">
+  <div id="gameContainer">
+    <h1>Custom Wordle</h1>
+    <div id="board"></div>
+    <div id="message"></div>
+    <div id="timer"></div>
+    <div id="controls" style="display:none;">
+      <button onclick="restartGame()">Restart</button>
+      <button onclick="resetGame()">Reset</button>
     </div>
   </div>
+</div>
 
-  <header><h1>Custom Wordle</h1></header>
+<canvas id="confetti"></canvas>
 
-  <main>
-    <div id="board" aria-hidden="false"></div>
-    <div id="keyboard"></div>
-    <div style="text-align:center;">
-      <button id="resetBtn">Reset</button>
-    </div>
-  </main>
+<script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
 
-  <!-- END / WIN OVERLAY (small box for both) -->
-  <div id="endOverlay" class="overlay hidden">
-    <div class="overlay-box small">
-      <h2 id="endText"></h2>
-      <div style="margin-top:12px;">
-        <button id="restartBtn">Restart Game</button>
-      </div>
-    </div>
-  </div>
+<script>
+/* ================= SCALE SUPPORT ================= */
 
-  <script src="game.js"></script>
+function applyScaleFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const scale = parseFloat(params.get("scale"));
+
+  if (!isNaN(scale) && scale > 0 && scale <= 2) {
+    const wrapper = document.getElementById("scaleWrapper");
+    wrapper.style.transform = "scale(" + scale + ")";
+  }
+}
+
+applyScaleFromURL();
+
+/* ================= GAME SETUP ================= */
+
+const board = document.getElementById("board");
+const message = document.getElementById("message");
+const timerDisplay = document.getElementById("timer");
+const canvas = document.getElementById("confetti");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let secretWord = "";
+let currentRow = 0;
+let currentGuess = "";
+let maxRows = 6;
+let gameOver = false;
+
+let confettiParticles = [];
+let confettiInterval = null;
+let confettiActive = false;
+
+let timeLeft = 30;
+let timerInterval = null;
+
+/* ================= BOARD ================= */
+
+function createBoard() {
+  board.innerHTML = "";
+  for (let i = 0; i < maxRows * 5; i++) {
+    const tile = document.createElement("div");
+    tile.classList.add("tile");
+    board.appendChild(tile);
+  }
+}
+
+/* ================= CONFETTI ================= */
+
+function startConfetti() {
+  confettiActive = true;
+  confettiInterval = setInterval(() => {
+    if (!confettiActive) return;
+    for (let i = 0; i < 8; i++) {
+      confettiParticles.push({
+        x: Math.random() * canvas.width,
+        y: -10,
+        size: Math.random() * 8 + 4,
+        speed: Math.random() * 3 + 2,
+        color: `hsl(${Math.random()*360},100%,50%)`
+      });
+    }
+  }, 100);
+  animateConfetti();
+}
+
+function slowStopConfetti(duration) {
+  let fadeStart = Date.now();
+  confettiActive = false;
+
+  const fadeInterval = setInterval(() => {
+    const elapsed = Date.now() - fadeStart;
+    if (elapsed >= duration) {
+      clearInterval(fadeInterval);
+      clearInterval(confettiInterval);
+      confettiInterval = null;
+      confettiParticles = [];
+    }
+  }, 100);
+}
+
+function animateConfetti() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  confettiParticles.forEach(p => {
+    p.y += p.speed;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  });
+  confettiParticles = confettiParticles.filter(p => p.y < canvas.height);
+  requestAnimationFrame(animateConfetti);
+}
+
+/* ================= GAME LOGIC ================= */
+
+function checkGuess() {
+  if (currentGuess.length !== 5) return;
+
+  const tiles = document.querySelectorAll(".tile");
+
+  for (let i = 0; i < 5; i++) {
+    const tile = tiles[currentRow * 5 + i];
+    const letter = currentGuess[i];
+
+    if (letter === secretWord[i]) {
+      tile.classList.add("correct");
+    } else if (secretWord.includes(letter)) {
+      tile.classList.add("present");
+    } else {
+      tile.classList.add("absent");
+    }
+  }
+
+  if (currentGuess === secretWord) {
+    winGame();
+    return;
+  }
+
+  currentRow++;
+  currentGuess = "";
+
+  if (currentRow >= maxRows) {
+    loseGame();
+  }
+}
+
+function winGame() {
+  gameOver = true;
+  message.textContent = "YOU WIN!";
+  document.getElementById("controls").style.display = "block";
+  startConfetti();
+}
+
+function loseGame() {
+  gameOver = true;
+  message.textContent = "YOU LOSE!";
+  document.getElementById("controls").style.display = "block";
+}
+
+/* ================= TIMER ================= */
+
+function startTimer() {
+  timeLeft = 30;
+  timerDisplay.textContent = "Time: " + timeLeft;
+
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    timerDisplay.textContent = "Time: " + timeLeft;
+
+    if (timeLeft === 3) {
+      slowStopConfetti(3000);
+    }
+
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      if (!gameOver) loseGame();
+    }
+  }, 1000);
+}
+
+/* ================= RESET / RESTART ================= */
+
+function restartGame() {
+  slowStopConfetti(2000);
+  resetCore();
+}
+
+function resetGame() {
+  slowStopConfetti(2000);
+  resetCore();
+}
+
+function resetCore() {
+  currentRow = 0;
+  currentGuess = "";
+  gameOver = false;
+  message.textContent = "";
+  document.getElementById("controls").style.display = "none";
+  createBoard();
+  startTimer();
+}
+
+/* ================= KEY INPUT ================= */
+
+document.addEventListener("keydown", e => {
+  if (gameOver) return;
+
+  const tiles = document.querySelectorAll(".tile");
+
+  if (e.key === "Backspace") {
+    if (currentGuess.length > 0) {
+      currentGuess = currentGuess.slice(0,-1);
+      tiles[currentRow*5 + currentGuess.length].textContent = "";
+    }
+  } else if (e.key === "Enter") {
+    checkGuess();
+  } else if (/^[a-zA-Z]$/.test(e.key) && currentGuess.length < 5) {
+    currentGuess += e.key.toUpperCase();
+    tiles[currentRow*5 + currentGuess.length - 1].textContent = e.key.toUpperCase();
+  }
+});
+
+/* ================= INIT ================= */
+
+function init() {
+  secretWord = "APPLE"; // unchanged logic
+  createBoard();
+  startTimer();
+}
+
+init();
+</script>
+
 </body>
 </html>
