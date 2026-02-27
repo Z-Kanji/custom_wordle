@@ -1,34 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
   <title>Custom Wordle</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
 </head>
 <body>
-
-<div id="overlay">
-  <div class="overlay-box">
-    <h2>Enter 5 Letter Word</h2>
-    <input type="text" id="customWord" maxlength="5">
-    <button id="startBtn">Start Game</button>
+  <!-- Start overlay (master only) -->
+  <div id="startOverlay" class="overlay">
+    <div class="overlay-box">
+      <h2>Enter 5-letter word</h2>
+      <input id="customWord" maxlength="5" autocomplete="off" />
+      <div style="margin-top:12px;">
+        <button id="startBtn">Start Game</button>
+      </div>
+    </div>
   </div>
-</div>
 
-<h1>Custom Wordle</h1>
-<div id="board"></div>
-<div id="keyboard"></div>
-<button id="resetBtn">Reset</button>
+  <header>
+    <h1>Custom Wordle</h1>
+  </header>
 
-<div id="winMessage" class="hidden">
-  <div class="overlay-box">
-    <h2 id="winText"></h2>
-    <canvas id="confetti"></canvas>
-    <button id="restartBtn">Restart</button>
+  <main>
+    <div id="board" aria-hidden="false"></div>
+
+    <div id="keyboard"></div>
+
+    <div style="text-align:center;">
+      <button id="resetBtn">Reset</button>
+    </div>
+  </main>
+
+  <!-- End overlay -->
+  <div id="endOverlay" class="overlay hidden">
+    <div class="overlay-box">
+      <h2 id="endText"></h2>
+      <canvas id="confettiCanvas"></canvas>
+      <div style="margin-top:12px;">
+        <button id="restartBtn">Restart Game</button>
+      </div>
+    </div>
   </div>
-</div>
 
-<script src="game.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
