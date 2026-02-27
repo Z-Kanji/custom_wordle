@@ -1,17 +1,16 @@
-/* game.js
-   Master/follower Wordle with Ably.
+/* game.js - master/follower Wordle with Ably
    Usage:
-     /index.html?ablyKey=YOUR_KEY&mode=master
-     /index.html?ablyKey=YOUR_KEY&mode=follow
+     index.html?ablyKey=YOUR_KEY&mode=master
+     index.html?ablyKey=YOUR_KEY&mode=follow
 */
 document.addEventListener('DOMContentLoaded', () => {
-  // ---- params & mode ----
+  // --- params & mode ---
   const params = new URLSearchParams(window.location.search);
   const ablyKey = params.get('ablyKey') || params.get('key') || '';
   const modeParam = (params.get('mode') || params.get('role') || 'master').toLowerCase();
   const isMaster = (modeParam === 'master' || modeParam === 'm' || !params.has('mode'));
 
-  // ---- DOM refs ----
+  // --- DOM refs ---
   const startOverlay = document.getElementById('startOverlay');
   const customWordInput = document.getElementById('customWord');
   const startBtn = document.getElementById('startBtn');
@@ -22,23 +21,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const endText = document.getElementById('endText');
   const restartBtn = document.getElementById('restartBtn');
 
-  // ---- state ----
+  // --- state ---
   let solution = '';
   let board = Array.from({length:6}, ()=>Array.from({length:5}, ()=>''));
   let tileStates = Array.from({length:6}, ()=>Array.from({length:5}, ()=>'')); // '', 'correct','present','absent'
-  let keyStates = {}; // letter -> 'correct'|'present'|'absent'
+  let keyStates = {}; // A->'correct'|'present'|'absent'
   let currentRow = 0;
   let currentCol = 0;
   let gameStarted = false;
   let gameOver = false;
   let lastReset = 0;
 
-  // ---- confetti (full-screen canvas appended) ----
-  let confettiCanvas = null;
-  let confettiCtx = null;
-  let confettiParticles = [];
-  let confettiRunning = false;
-  const CONFETTI_DURATION_MS = 30_000; // 30 seconds
+  // --- confetti full-screen setup (appended by JS when needed) ---
+  let confettiCanvas = null, confettiCtx = null, confettiParticles = [], confettiRunning = false;
+  const CONFETTI_DURATION = 30000; // 30s
 
   function ensureConfettiCanvas(){
     if (confettiCanvas) return;
@@ -47,20 +43,16 @@ document.addEventListener('DOMContentLoaded', () => {
     confettiCanvas.style.position = 'fixed';
     confettiCanvas.style.left = '0';
     confettiCanvas.style.top = '0';
-    confettiCanvas.style.width = '100%';
-    confettiCanvas.style.height = '100%';
-    confettiCanvas.style.pointerEvents = 'none';
-    confettiCanvas.style.zIndex = '2000'; // above overlays (overlay z-index is 1000)
-    document.body.appendChild(confettiCanvas);
-    confettiCtx = confettiCanvas.getContext('2d');
-    resizeConfettiCanvas();
-    window.addEventListener('resize', resizeConfettiCanvas);
-  }
-
-  function resizeConfettiCanvas(){
-    if (!confettiCanvas) return;
     confettiCanvas.width = window.innerWidth;
     confettiCanvas.height = window.innerHeight;
+    confettiCanvas.style.pointerEvents = 'none';
+    confettiCanvas.style.zIndex = '2000';
+    document.body.appendChild(confettiCanvas);
+    confettiCtx = confettiCanvas.getContext('2d');
+    window.addEventListener('resize', ()=> {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+    });
   }
 
   function startConfettiFullScreen(){
@@ -68,58 +60,56 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confettiRunning) return;
     confettiRunning = true;
     confettiParticles = [];
-    // continuous spawn rate and physics parameters (slower fall)
-    const spawnPerFrame = 4;
     const colors = ['#f1c40f','#2ecc71','#e74c3c','#3498db','#ffffff','#ff66cc'];
+    const spawnRate = 6; // per frame approx
 
-    function spawnParticles(){
-      for (let i=0;i<spawnPerFrame;i++){
+    let last = performance.now();
+    function spawn(){
+      for (let i=0;i<spawnRate;i++){
         confettiParticles.push({
           x: Math.random()*confettiCanvas.width,
-          y: -10 - Math.random()*confettiCanvas.height*0.2, // start above top
-          vx: (Math.random()-0.5)*1.5,
-          vy: 1 + Math.random()*2.0, // slower initial vy
+          y: -10 - Math.random()*confettiCanvas.height*0.2, // start above
+          vx: (Math.random()-0.5)*1.2,
+          vy: 1 + Math.random()*1.8, // slower downward
           size: 6 + Math.random()*6,
           color: colors[Math.floor(Math.random()*colors.length)],
           rot: Math.random()*360,
-          rotSpeed: (Math.random()-0.5)*6
+          rotSpeed: (Math.random()-0.5)*0.2
         });
       }
     }
 
-    let lastTime = performance.now();
-    function frame(now){
-      const dt = now - lastTime;
-      lastTime = now;
-      // spawn
-      spawnParticles();
-      // update
+    function step(now){
+      const dt = Math.max(16, now - last);
+      last = now;
+      // spawn a few
+      spawn();
       confettiCtx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
       for (let i=confettiParticles.length-1;i>=0;i--){
         const p = confettiParticles[i];
-        p.vy += 0.02 * (dt/16); // gravity scaled by dt
+        p.vy += 0.02 * (dt/16);
         p.x += p.vx * (dt/16);
         p.y += p.vy * (dt/16);
         p.rot += p.rotSpeed * (dt/16);
         confettiCtx.save();
         confettiCtx.translate(p.x, p.y);
-        confettiCtx.rotate(p.rot * Math.PI / 180);
+        confettiCtx.rotate(p.rot);
         confettiCtx.fillStyle = p.color;
         confettiCtx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
         confettiCtx.restore();
-        // remove if below screen + margin
-        if (p.y > confettiCanvas.height + 100) confettiParticles.splice(i,1);
+        // remove when below screen
+        if (p.y > confettiCanvas.height + 50) confettiParticles.splice(i,1);
       }
-      if (confettiRunning) requestAnimationFrame(frame);
+      if (confettiRunning) requestAnimationFrame(step);
       else confettiCtx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
     }
 
-    requestAnimationFrame(frame);
+    requestAnimationFrame(step);
     // stop after duration
-    setTimeout(()=>{ confettiRunning = false; }, CONFETTI_DURATION_MS);
+    setTimeout(()=>{ confettiRunning = false; }, CONFETTI_DURATION);
   }
 
-  // ---- Ably setup ----
+  // --- Ably setup ---
   let channel = null;
   if (ablyKey) {
     try {
@@ -131,17 +121,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---- keyboard layout & render ----
+  // --- keyboard layout & rendering ---
   const LAYOUT = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
 
   function renderBoard(){
     boardEl.innerHTML = '';
     for (let r=0;r<6;r++){
-      const row = document.createElement('div');
-      row.className = 'row';
+      const row = document.createElement('div'); row.className='row';
       for (let c=0;c<5;c++){
-        const tile = document.createElement('div');
-        tile.className = 'tile';
+        const tile = document.createElement('div'); tile.className='tile';
         tile.textContent = board[r][c] || '';
         tile.classList.remove('correct','present','absent');
         const s = tileStates[r][c];
@@ -159,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let i=0;i<LAYOUT.length;i++){
       const rowStr = LAYOUT[i];
       const rowDiv = document.createElement('div'); rowDiv.className='key-row';
-      if (i === 2){
+      if (i === 2) {
         const enterBtn = document.createElement('button'); enterBtn.className='key'; enterBtn.textContent='ENTER';
         if (isMaster && gameStarted && !gameOver) enterBtn.addEventListener('click', ()=>onScreenKey('ENTER'));
         rowDiv.appendChild(enterBtn);
@@ -170,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isMaster && gameStarted && !gameOver) btn.addEventListener('click', ()=>onScreenKey(ch));
         rowDiv.appendChild(btn);
       }
-      if (i === 2){
+      if (i === 2) {
         const delBtn = document.createElement('button'); delBtn.className='key'; delBtn.textContent='DEL';
         if (isMaster && gameStarted && !gameOver) delBtn.addEventListener('click', ()=>onScreenKey('DEL'));
         rowDiv.appendChild(delBtn);
@@ -179,44 +167,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ---- on-screen key and keyboard handlers (master only when gameStarted) ----
+  // --- input handlers (master) ---
   function onScreenKey(label){
     if (!isMaster || !gameStarted || gameOver) return;
-    if (label === 'ENTER'){
-      if (currentCol === 5) submitGuess();
-      return;
-    }
-    if (label === 'DEL'){
-      if (currentCol > 0){
-        currentCol--;
-        board[currentRow][currentCol] = '';
-        renderBoard();
-        publishState();
-      }
-      return;
-    }
-    if (currentCol < 5){
-      board[currentRow][currentCol] = label;
-      currentCol++;
-      renderBoard();
-      publishState();
-    }
+    if (label === 'ENTER'){ if (currentCol === 5) submitGuess(); return; }
+    if (label === 'DEL'){ if (currentCol>0){ currentCol--; board[currentRow][currentCol]=''; renderBoard(); publishState(); } return; }
+    if (currentCol < 5){ board[currentRow][currentCol] = label; currentCol++; renderBoard(); publishState(); }
   }
 
   document.addEventListener('keydown', (e) => {
     if (!isMaster || !gameStarted || gameOver) return;
-    if (e.key === 'Enter'){ if (currentCol === 5) submitGuess(); return; }
-    if (e.key === 'Backspace'){ if (currentCol>0){ currentCol--; board[currentRow][currentCol]=''; renderBoard(); publishState(); } return; }
+    if (e.key === 'Enter') { if (currentCol === 5) submitGuess(); return; }
+    if (e.key === 'Backspace') { if (currentCol>0){ currentCol--; board[currentRow][currentCol]=''; renderBoard(); publishState(); } return; }
     const ch = e.key.toUpperCase();
-    if (/^[A-Z]$/.test(ch) && ch.length === 1 && currentCol < 5){
-      board[currentRow][currentCol] = ch;
-      currentCol++;
-      renderBoard();
-      publishState();
-    }
+    if (/^[A-Z]$/.test(ch) && ch.length === 1 && currentCol < 5){ board[currentRow][currentCol]=ch; currentCol++; renderBoard(); publishState(); }
   });
 
-  // ---- evaluate guess (handles duplicates) ----
+  // --- evaluate guess (handles duplicates) ---
   function evaluateGuess(guess, answer){
     const res = Array(5).fill('absent');
     const arr = answer.split('');
@@ -225,14 +192,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return res;
   }
 
-  // ---- submit guess (master only) ----
+  // --- submit guess (master only) ---
   function submitGuess(){
     if (!isMaster || !gameStarted || gameOver) return;
     if (currentCol !== 5) return;
     const guess = board[currentRow].join('');
     if (guess.length !== 5) return;
+
     const result = evaluateGuess(guess, solution);
-    // update tileStates and keyStates with priority correct > present > absent
     for (let c=0;c<5;c++){
       tileStates[currentRow][c] = result[c] === 'correct' ? 'correct' : (result[c] === 'present' ? 'present' : 'absent');
       const L = board[currentRow][c];
@@ -246,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (result.every(x => x === 'correct')){
       gameOver = true;
-      // publish with win true and allow followers to trigger confetti
+      // publish win=true and include solution for follower overlay if needed
       publishState(true);
       showEndOverlay(true);
       return;
@@ -256,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentCol = 0;
     if (currentRow >= 6){
       gameOver = true;
-      publishState(false);
+      publishState(false); // lose, include solution in payload
       showEndOverlay(false);
       return;
     }
@@ -264,21 +231,18 @@ document.addEventListener('DOMContentLoaded', () => {
     publishState(false);
   }
 
-  // ---- end overlay & confetti ----
+  // --- end overlay & behavior ---
   function showEndOverlay(win){
     endText.textContent = win ? 'YOU WIN!' : ('YOU LOSE! Word: ' + solution);
     endOverlay.classList.remove('hidden');
-    if (win){
-      // start confetti across full screen for 30s
-      startConfettiFullScreen();
-    }
+    if (win) startConfettiFullScreen();
   }
 
-  // ---- reset / restart single/double ----
+  // --- reset/restart single/double ---
   resetBtn.addEventListener('click', ()=>{
     const now = Date.now();
     if (now - lastReset < 1000){
-      // double click => full reset
+      // full restart
       fullReset();
       lastReset = 0;
     } else {
@@ -288,9 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  restartBtn.addEventListener('click', ()=>{
-    if (isMaster) fullReset();
-  });
+  restartBtn.addEventListener('click', ()=>{ if (isMaster) fullReset(); });
 
   function softReset(){
     board = Array.from({length:6}, ()=>Array.from({length:5}, ()=>''));
@@ -311,20 +273,14 @@ document.addEventListener('DOMContentLoaded', () => {
     publishState(false);
   }
 
-  // ---- publish / subscribe ----
+  // --- publish / subscribe ---
   function publishState(win){
     if (!channel || !isMaster) return;
     const payload = {
-      board,
-      tileStates,
-      keyStates,
-      currentRow,
-      currentCol,
-      gameStarted,
-      gameOver,
+      board, tileStates, keyStates, currentRow, currentCol, gameStarted, gameOver,
       win: !!win,
-      solution: (gameOver && win) ? solution : (gameOver && !win ? solution : undefined),
-      timestamp: Date.now()
+      solution: gameOver ? solution : undefined,
+      ts: Date.now()
     };
     channel.publish('state', payload);
   }
@@ -338,7 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
     currentCol = (typeof state.currentCol === 'number') ? state.currentCol : currentCol;
     gameStarted = !!state.gameStarted;
     gameOver = !!state.gameOver;
-    // show solution if provided (only when gameOver)
     if (state.solution) solution = state.solution;
     renderBoard();
     renderKeyboard();
@@ -352,24 +307,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (channel){
-    // subscribe immediately so follower gets updates
-    channel.subscribe('state', (msg) => {
-      if (isMaster) return;
-      applyState(msg.data);
-    });
+    channel.subscribe('state', (msg) => { if (isMaster) return; applyState(msg.data); });
 
-    // follower fetch last message to catch up
-    if (!isMaster && channel.history) {
+    if (!isMaster && channel.history){
       channel.history({limit: 5}, (err, result) => {
         if (!err && result && result.items && result.items.length){
-          const last = result.items[result.items.length-1];
+          // pick most recent
+          const last = result.items[result.items.length - 1];
           if (last && last.data) applyState(last.data);
         }
       });
     }
   }
 
-  // ---- start overlay wiring (master) ----
+  // --- start wiring ---
   if (isMaster){
     if (startOverlay) startOverlay.style.display = 'flex';
     startBtn.addEventListener('click', startFromOverlay);
@@ -379,9 +330,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function startFromOverlay(){
-    const val = (customWordInput.value || '').trim().toUpperCase();
-    if (!val || val.length !== 5) return;
-    solution = val;
+    const v = (customWordInput.value || '').trim().toUpperCase();
+    if (!v || v.length !== 5) return;
+    solution = v;
     gameStarted = true;
     if (startOverlay) startOverlay.style.display = 'none';
     softReset();
@@ -390,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     publishState(false);
   }
 
-  // ---- initial draw ----
+  // --- initial draw ---
   softReset();
   renderBoard();
   renderKeyboard();
