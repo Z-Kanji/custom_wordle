@@ -19,10 +19,14 @@
 <h1>Custom Wordle</h1>
 <div id="board"></div>
 <div id="keyboard"></div>
+<button id="resetBtn">Reset</button>
 
 <div id="winMessage" class="hidden">
-  <h2>You Win!</h2>
-  <canvas id="confetti"></canvas>
+  <div class="overlay-box">
+    <h2 id="winText"></h2>
+    <canvas id="confetti"></canvas>
+    <button id="restartBtn">Restart</button>
+  </div>
 </div>
 
 <script src="script.js"></script>
