@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>SBU Wordle</title>
+    <link rel="stylesheet" href="./style.css">
+
+  </head>
+    
+  <body>
+  <html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Custom Wordle</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Word Entry Overlay -->
+  <div id="wordOverlay" class="overlay">
+    <div class="overlay-content">
+      <h2>Enter 5 Letter Word</h2>
+      <input id="wordInput" maxlength="5" autocomplete="off" />
+      <button id="startBtn">Start Game</button>
+    </div>
+  </div>
+
+  <!-- Game Container -->
+  <div id="gameContainer">
+    <div id="board"></div>
+    <div id="keyboard"></div>
+    <button id="resetBtn">Reset</button>
+  </div>
+
+  <!-- End Game Overlay -->
+  <div id="endOverlay" class="overlay hidden">
+    <div class="overlay-content">
+      <h2 id="endMessage"></h2>
+      <button id="restartBtn">Restart Game</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>
+    <script  src="./script.js"></script>
+
+  </body>
+  
+</html>
