@@ -27,14 +27,13 @@ main{max-width:1100px;margin:0 auto 40px;padding:0 12px}
 button{font-size:14px}
 #resetBtn{margin-top:14px;padding:8px 18px}
 
-/* Overlays (centered, same small box for both start & end) */
+/* Overlays (centered, small box) */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000}
-.overlay-box{background:#1f1f1f;padding:18px;border-radius:10px;text-align:center;min-width:260px}
-.overlay-box.small{min-width:360px;max-width:90%} /* keep start and end same size */
+.overlay-box{background:#1f1f1f;padding:14px;border-radius:10px;text-align:center;min-width:260px}
+.overlay-box.small{min-width:320px;max-width:90%;padding:12px} /* compact box */
 .hidden{display:none}
 
-/* confetti canvas */
-#confettiCanvas{display:block;margin:12px auto 0;pointer-events:none}
+/* confetti canvas will be full-screen, appended by JS and given a high z-index (2000) */
 
 /* Responsive */
 @media (max-width:640px){
