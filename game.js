@@ -1,11 +1,27 @@
 /* game.js
-   Master/follower Wordle with Ably + tapered confetti on reset/restart.
+   Master/follower Wordle with Ably + &scale URL param support.
    Usage:
      index.html?ablyKey=YOUR_KEY&mode=master
      index.html?ablyKey=YOUR_KEY&mode=follow
+     index.html?ablyKey=YOUR_KEY&mode=follow&scale=0.75
 */
 document.addEventListener('DOMContentLoaded', () => {
-  // ---- params & mode ----
+  // ---- read scale param and apply immediately ----
+  const paramsEarly = new URLSearchParams(window.location.search);
+  const scaleParam = parseFloat(paramsEarly.get('scale'));
+  if (!Number.isNaN(scaleParam)) {
+    // clamp scale between 0.2 and 2.0
+    const s = Math.min(2.0, Math.max(0.2, scaleParam));
+    // apply transform to body and adjust width so scaled content fits
+    document.body.style.transform = `scale(${s})`;
+    document.body.style.transformOrigin = 'top left';
+    // adjust layout width so no horizontal scrollbars: increase document width proportionally
+    document.documentElement.style.width = `${100 / s}%`;
+    // ensure height can scroll if needed
+    document.documentElement.style.overflow = 'hidden';
+  }
+
+  // ---- params & mode (now for rest of app) ----
   const params = new URLSearchParams(window.location.search);
   const ablyKey = params.get('ablyKey') || params.get('key') || '';
   const modeParam = (params.get('mode') || params.get('role') || 'master').toLowerCase();
@@ -131,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     confettiTaperMs = taperMs;
   }
 
-  // ---- Ably ----
+  // ---- Ably setup ----
   let channel = null;
   if (ablyKey) {
     try {
@@ -286,13 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- publish/apply ----
   function publishState(win=false, extra={}) {
     if(!channel||!isMaster) return;
-    const payload={
-      board,tileStates,keyStates,currentRow,currentCol,gameStarted,gameOver,
-      win:!!win,
-      solution: gameOver?solution:undefined,
-      confettiCue:extra.confettiCue||undefined,
-      ts:Date.now()
-    };
+    const payload={board,tileStates,keyStates,currentRow,currentCol,gameStarted,gameOver,win:!!win,solution:gameOver?solution:undefined,confettiCue:extra.confettiCue||undefined,ts:Date.now()};
     channel.publish('state',payload);
   }
 
@@ -322,11 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if(channel){
-    channel.subscribe('state',(msg)=>{
-      if(isMaster) return;
-      applyState(msg.data);
-    });
-
+    channel.subscribe('state',(msg)=>{ if(isMaster) return; applyState(msg.data); });
     if(!isMaster && channel.history){
       channel.history({limit:5},(err,result)=>{
         if(!err && result && result.items && result.items.length){
@@ -358,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(isMaster) publishState(false);
   }
 
+  // ---- initial draw ----
   softReset();
   renderBoard();
   renderKeyboard();
